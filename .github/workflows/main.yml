@@ -1,0 +1,70 @@
+name: Build and Deploy React Vite
+on:
+  repository_dispatch:
+    types: [source-updated]
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+      
+      - name: Checkout source repo
+        uses: actions/checkout@v4
+        with:
+          repository: Yahia0mohamed/Portfolio
+          ref: main
+          path: source-code
+          token: ${{ secrets.PAT_TOKEN }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: source-code/package-lock.json
+          
+      - name: Clean and install dependencies
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install --no-optional
+          npm install
+        working-directory: source-code
+        
+      - name: Build project
+        run: npm run build
+        working-directory: source-code
+        
+      - name: List build files (for debugging)
+        run: ls -la source-code/dist
+        
+      - name: Copy build files to repo root
+        run: |
+          # Remove old dist folder if it exists
+          rm -rf dist
+          # Copy new build files
+          cp -r source-code/dist ./
+          # List files to confirm
+          ls -la dist/
+        
+      - name: Commit and push build files  
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add dist/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Deploy: Update build files [skip ci]"
+            git push
+          fi
+        
+      - name: Upload build artifacts (backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-files
+          path: dist
